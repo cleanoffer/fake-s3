@@ -89,7 +89,7 @@ module FakeS3
         response['Content-Type'] = real_obj.content_type
         stat = File::Stat.new(real_obj.io.path)
 
-        response['Last-Modified'] = stat.mtime.iso8601()
+        response['Last-Modified'] = stat.mtime.httpdate()
         response['Etag'] = "\"#{real_obj.md5}\""
         response['Accept-Ranges'] = "bytes"
         response['Last-Ranges'] = "bytes"
@@ -118,7 +118,7 @@ module FakeS3
           end
         end
         response['Content-Length'] = File::Stat.new(real_obj.io.path).size
-        response['Last-Modified'] = real_obj.modified_date
+        response['Last-Modified'] = Time.parse(real_obj.modified_date).httpdate()
         if s_req.http_verb == 'HEAD'
           response.body = ""
         else
