@@ -213,12 +213,12 @@ module FakeS3
           elems = path.split("/")
         end
 
-        if elems.size == 0
-          # List buckets
-          s_req.type = Request::LIST_BUCKETS
-        elsif elems.size == 1
+        if elems.size == 1 || (elems.size == 0 && !s_req.is_path_style)
           s_req.type = Request::LS_BUCKET
           s_req.query = query
+        elsif elems.size == 0
+          # List buckets
+          s_req.type = Request::LIST_BUCKETS
         else
           if query["acl"] == ""
             s_req.type = Request::GET_ACL
