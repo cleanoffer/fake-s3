@@ -118,7 +118,7 @@ module FakeS3
           end
         end
         response['Content-Length'] = File::Stat.new(real_obj.io.path).size
-        response['Last-Modified'] = Time.parse(real_obj.modified_date).httpdate()
+        response['Last-Modified'] = real_obj.modified_http_date
         if s_req.http_verb == 'HEAD'
           response.body = ""
         else
