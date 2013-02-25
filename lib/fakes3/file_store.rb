@@ -50,6 +50,10 @@ module FakeS3
     end
 
     def get_bucket(bucket)
+      if !@bucket_hash[bucket]
+        # Lazily create a bucket.  TODO fix this to return the proper error
+        bucket_obj = @store.create_bucket(s_req.bucket)
+      end
       @bucket_hash[bucket]
     end
 
