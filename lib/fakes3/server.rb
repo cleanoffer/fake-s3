@@ -137,17 +137,19 @@ module FakeS3
       case s_req.type
       when Request::COPY
         @store.copy_object(s_req.src_bucket,s_req.src_object,s_req.bucket,s_req.object)
+        response.body = "<CopyObjectResult></CopyObjectResult>"
       when Request::STORE
         bucket_obj = @store.get_bucket(s_req.bucket)
 
         real_obj = @store.store_object(bucket_obj,s_req.object,s_req.webrick_request)
         response['Etag'] = "\"#{real_obj.md5}\""
+        response.body = ""
       when Request::CREATE_BUCKET
         @store.create_bucket(s_req.bucket)
+        response.body = ""
       end
 
       response.status = 200
-      response.body = ""
       response['Content-Type'] = "text/xml"
     end
 
