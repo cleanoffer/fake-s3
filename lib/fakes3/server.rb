@@ -187,7 +187,7 @@ module FakeS3
         status = form['success_action_status']
         response.status = status ? status.to_i : 204
         if response.status == 201
-          response.body = <<-EOS
+          response.body = <<-EOS.strip
           <?xml version="1.0" encoding="UTF-8"?>
           <PostResponse>
             <Location>http://#{request.host}:#{request.port}/#{s_req.object}</Location>
