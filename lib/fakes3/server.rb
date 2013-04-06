@@ -108,7 +108,7 @@ module FakeS3
         response['Content-Type'] = real_obj.content_type
         stat = File::Stat.new(real_obj.io.path)
 
-        response['Last-Modified'] = stat.mtime.iso8601()
+        response['Last-Modified'] = stat.mtime.httpdate()
         response['Etag'] = "\"#{real_obj.md5}\""
         response['Accept-Ranges'] = "bytes"
         response['Last-Ranges'] = "bytes"
@@ -141,7 +141,7 @@ module FakeS3
           end
         end
         response['Content-Length'] = File::Stat.new(real_obj.io.path).size
-        response['Last-Modified'] = real_obj.modified_date
+        response['Last-Modified'] = real_obj.modified_http_date
         if s_req.http_verb == 'HEAD'
           response.body = ""
         else
@@ -274,12 +274,12 @@ module FakeS3
           elems = path.split("/")
         end
 
-        if elems.size == 0
-          # List buckets
-          s_req.type = Request::LIST_BUCKETS
-        elsif elems.size == 1
+        if elems.size == 1 || (elems.size == 0 && !s_req.is_path_style)
           s_req.type = Request::LS_BUCKET
           s_req.query = query
+        elsif elems.size == 0
+          # List buckets
+          s_req.type = Request::LIST_BUCKETS
         else
           if query["acl"] == ""
             s_req.type = Request::GET_ACL

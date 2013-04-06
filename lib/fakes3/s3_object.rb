@@ -15,5 +15,13 @@ module FakeS3
     def <=>(object)
       @name <=> object.name
     end
+
+    def modified_http_date
+      Time.parse(modified_date).httpdate()
+    end
+
+    def modified_s3_date
+      Time.parse(modified_date).getutc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end
   end
 end
