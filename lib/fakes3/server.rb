@@ -39,6 +39,19 @@ module FakeS3
   end
 
   class Servlet < WEBrick::HTTPServlet::AbstractServlet
+    class PostRequest
+      attr_reader :header
+      def initialize(headers, body)
+        @header = headers
+        @body = body
+      end
+
+      def body
+        yield @body if block_given?
+        @body
+      end
+    end
+
     def initialize(server,store,hostname)
       super(server)
       @store = store
@@ -46,7 +59,13 @@ module FakeS3
       @root_hostnames = [hostname,'localhost','s3.amazonaws.com','s3.localhost']
     end
 
+    def do_OPTIONS(request, response)
+      add_cors_headers(request, response)
+      super
+    end
+
     def do_GET(request, response)
+      add_cors_headers(request, response)
       s_req = normalize_request(request)
 
       case s_req.type
@@ -132,6 +151,7 @@ module FakeS3
     end
 
     def do_PUT(request,response)
+      add_cors_headers(request, response)
       s_req = normalize_request(request)
 
       case s_req.type
@@ -140,7 +160,6 @@ module FakeS3
         response.body = "<CopyObjectResult></CopyObjectResult>"
       when Request::STORE
         bucket_obj = @store.get_bucket(s_req.bucket)
-
         real_obj = @store.store_object(bucket_obj,s_req.object,s_req.webrick_request)
         response['Etag'] = "\"#{real_obj.md5}\""
         response.body = ""
@@ -153,11 +172,45 @@ module FakeS3
       response['Content-Type'] = "text/xml"
     end
 
-    # Posts aren't supported yet
+    # See:
+    # http://aws.amazon.com/articles/1434
+    # http://docs.aws.amazon.com/AmazonS3/latest/dev/HTTPPOSTForms.html
+    # http://docs.aws.amazon.com/AmazonS3/2006-03-01/API/RESTObjectPOST.html
     def do_POST(request,response)
+      add_cors_headers(request, response)
+
+      s_req = normalize_request(request)
+      bucket_obj = @store.get_bucket(s_req.bucket)
+      real_obj = @store.store_object(bucket_obj, s_req.object, s_req.webrick_request)
+      response['Etag'] = "\"#{real_obj.md5}\""
+      response['Connection'] = 'close'
+
+      form = request.query
+      if redirect = form['success_action_redirect']
+        response.status = 307
+        response['Location'] = redirect
+      else
+        status = form['success_action_status']
+        response.status = status ? status.to_i : 204
+        if response.status == 201
+          response.body = <<-EOS.strip
+          <?xml version="1.0" encoding="UTF-8"?>
+          <PostResponse>
+            <Location>http://#{request.host}:#{request.port}/#{s_req.object}</Location>
+            <Bucket>#{s_req.bucket}</Bucket>
+            <Key>#{s_req.object}</Key>
+            <ETag>#{real_obj.md5}</ETag>
+          </PostResponse>
+          EOS
+        end
+      end
+    rescue => e
+      response.status = 400
+      response.body = e.message
     end
 
     def do_DELETE(request,response)
+      add_cors_headers(request, response)
       s_req = normalize_request(request)
 
       case s_req.type
@@ -173,6 +226,9 @@ module FakeS3
     end
 
     private
+    def add_cors_headers(request, response)
+      response['Access-Control-Allow-Origin'] = '*' if request['Origin']
+    end
 
     def normalize_delete(webrick_req,s_req)
       path = webrick_req.path
@@ -276,6 +332,15 @@ module FakeS3
       s_req.webrick_request = webrick_req
     end
 
+    def normalize_post(webrick_req, s_req)
+      form = webrick_req.query
+      file = form['file']
+      s_req.object = form['key'].sub('${filename}', file.filename)
+      headers = {'content-type' => [file['content-type']]}
+      s_req.webrick_request = PostRequest.new(headers, file)
+      s_req.type = Request::STORE
+    end
+
     # This method takes a webrick request and generates a normalized FakeS3 request
     def normalize_request(webrick_req)
       host_header= webrick_req["Host"]
@@ -299,6 +364,8 @@ module FakeS3
         normalize_get(webrick_req,s_req)
       when 'DELETE'
         normalize_delete(webrick_req,s_req)
+      when 'POST'
+        normalize_post(webrick_req, s_req)
       else
         raise "Unknown Request"
       end
